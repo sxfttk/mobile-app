@@ -1,98 +1,61 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useEffect, useState } from "react";
+import { ScrollView, Text, View } from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+// Browser on this computer: localhost. Expo Go on a phone: use your computer's IP, e.g. ws://192.168.1.20:8000/ws
+const WS_URL = "ws://localhost:8000/ws";
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
+// Date/Time fields may arrive as a number (milliseconds) or as text
+function formatDate(value: any) {
+  if (value === null || value === undefined || value === "") return "";
+  const d = new Date(typeof value === "number" ? value : isNaN(Number(value)) ? value : Number(value));
+  return isNaN(d.getTime()) ? String(value) : d.toLocaleString();
 }
 
-export default function HomeScreen() {
+export default function App() {
+  const [alerts, setAlerts] = useState([]);
+  const [status, setStatus] = useState("connecting");
+
+  useEffect(() => {
+    const ws = new WebSocket(WS_URL);
+    ws.onopen = () => setStatus("connected");
+    ws.onclose = () => setStatus("disconnected");
+    ws.onerror = () => setStatus("error");
+    ws.onmessage = (m) => {
+      try {
+        setAlerts((prev) => [JSON.parse(m.data), ...prev].slice(0, 10));
+      } catch (e) {
+        console.error("Invalid event JSON", e);
+      }
+    };
+    return () => ws.close();
+  }, []);
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
+    <SafeAreaProvider>
+      <SafeAreaView style={{ flex: 1, padding: 24, backgroundColor: "#FFFFFF" }}>
+        <Text style={{ fontSize: 28, fontWeight: "700", color: "#10243A" }}>Requisition Alerts</Text>
+        <Text style={{ color: "#666", marginBottom: 16 }}>{status}</Text>
+        <ScrollView>
+          {alerts.length === 0 && (
+            <Text style={{ color: "#10243A" }}>Waiting for Requisition alerts...</Text>
+          )}
+          {alerts.map((a, i) => (
+            <View key={i} style={{ marginBottom: 16, padding: 12, backgroundColor: "#FFF5F3",
+                                   borderLeftWidth: 4, borderLeftColor: "#c62828" }}>
+              <Text style={{ fontWeight: "700", color: "#10243A" }}>
+                {a.Job_Title__c} ({a.Requisition_Number__c})
+              </Text>
+              <Text style={{ color: "#10243A" }}>Priority: {a.Priority__c}</Text>
+              <Text style={{ color: "#10243A" }}>Role Category: {a.Role_Category__c}</Text>
+              <Text style={{ color: "#10243A" }}>Location: {a.Location__c}</Text>
+              <Text style={{ color: "#10243A" }}>Employment Type: {a.Employment_Type__c}</Text>
+              <Text style={{ color: "#10243A" }}>Client: {a.Client_Organisation_Name__c}</Text>
+              <Text style={{ color: "#10243A" }}>Published: {formatDate(a.Published_Datetime__c)}</Text>
+            </View>
+          ))}
+        </ScrollView>
       </SafeAreaView>
-    </ThemedView>
+    </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-  },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
-  },
-});
